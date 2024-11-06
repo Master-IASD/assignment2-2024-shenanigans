@@ -1,2 +1,3 @@
 env/
 Lab_genai/
+.env.ci
