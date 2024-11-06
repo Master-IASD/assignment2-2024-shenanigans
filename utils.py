@@ -1,6 +1,8 @@
 import torch
 import os
-
+from torch_fidelity import calculate_metrics
+from torchvision import datasets, transforms
+import torchvision.utils as vutils
 
 
 def D_train(x, G, D, D_optimizer, criterion):
@@ -50,7 +52,6 @@ def G_train(x, G, D, G_optimizer, criterion):
     return G_loss.data.item()
 
 
-
 def save_models(G, D, folder):
     torch.save(G.state_dict(), os.path.join(folder,'G.pth'))
     torch.save(D.state_dict(), os.path.join(folder,'D.pth'))
@@ -60,3 +61,33 @@ def load_model(G, folder):
     ckpt = torch.load(os.path.join(folder,'G.pth'))
     G.load_state_dict({k.replace('module.', ''): v for k, v in ckpt.items()})
     return G
+
+
+def from_mnist_to_jpeg(real_images_path="data/train_images/"):
+    os.makedirs(real_images_path, exist_ok=True)
+
+    transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize(mean=(0.5), std=(0.5))])
+    train_dataset = datasets.MNIST(root='data/MNIST/', train=True, transform=transform, download=True)
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, 
+                                               batch_size=64, shuffle=True)
+
+    for i, (images, _) in enumerate(train_loader):
+        for j in range(images.size(0)):
+            image_path = os.path.join(real_images_path, f"{i * len(images) + j}.png")
+            vutils.save_image(images[j], image_path)
+
+
+def metrics(real_images_path = "data/train_images", generated_images_path = "samples/"):
+    metrics = calculate_metrics(
+        input1=real_images_path,
+        input2=generated_images_path,
+        fid=True,
+        precision=True,
+        recall=True
+    )
+    print("FID:", metrics['frechet_inception_distance'])
+    print("Précision:", metrics['precision'])
+    print("Recall:", metrics['recall'])
+    return
