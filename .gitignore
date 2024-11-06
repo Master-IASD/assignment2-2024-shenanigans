@@ -3,3 +3,4 @@ Lab_genai/
 .env.ci
 data/train_images/
 samples/
+notebooks/
