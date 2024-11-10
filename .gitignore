@@ -4,3 +4,5 @@ Lab_genai/
 data/train_images/
 samples/
 notebooks/
+__pycache__/
+venv/

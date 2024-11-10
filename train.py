@@ -59,20 +59,26 @@ if __name__ == '__main__':
 
 
     # define loss
-    criterion = nn.BCELoss() 
+    # criterion = nn.BCELoss() 
 
     # define optimizers
-    G_optimizer = optim.Adam(G.parameters(), lr = args.lr)
-    D_optimizer = optim.Adam(D.parameters(), lr = args.lr)
+    G_optimizer = optim.Adam(G.parameters(), lr=args.lr, betas=(0.0, 0.9))
+    D_optimizer = optim.Adam(D.parameters(), lr=args.lr, betas=(0.0, 0.9))
 
-    print('Start Training :')
+    print('Start Training:')
     
     n_epoch = args.epochs
+    n_critic = 5  # number of critic iterations per generator iteration
     for epoch in trange(1, n_epoch+1, leave=True):           
         for batch_idx, (x, _) in enumerate(train_loader):
             x = x.view(-1, mnist_dim)
-            D_train(x, G, D, D_optimizer, criterion)
-            G_train(x, G, D, G_optimizer, criterion)
+            
+            # Train critic
+            for _ in range(n_critic):
+                D_loss = D_train(x, G, D, D_optimizer, None)
+                
+            # Train generator
+            G_loss = G_train(x, G, D, G_optimizer, None)
 
         if epoch % 10 == 0:
             save_models(G, D, 'checkpoints')
