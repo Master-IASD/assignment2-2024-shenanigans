@@ -58,7 +58,9 @@ def save_models(G, D, folder):
 
 
 def load_model(G, folder):
-    ckpt = torch.load(os.path.join(folder,'G.pth'))
+    checkpoint_path = os.path.join(os.getcwd(), 'checkpoints', 'G.pth')
+    ckpt = torch.load(checkpoint_path)
+
     G.load_state_dict({k.replace('module.', ''): v for k, v in ckpt.items()})
     return G
 
@@ -84,10 +86,6 @@ def metrics(real_images_path = "data/train_images", generated_images_path = "sam
         input1=real_images_path,
         input2=generated_images_path,
         fid=True,
-        precision=True,
-        recall=True
     )
     print("FID:", metrics['frechet_inception_distance'])
-    print("Précision:", metrics['precision'])
-    print("Recall:", metrics['recall'])
     return
