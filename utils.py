@@ -1,4 +1,5 @@
 import torch
+from torch_fidelity import calculate_metrics
 import os
 
 def save_models(G, D, folder):
@@ -10,6 +11,21 @@ def load_model(G, folder):
     ckpt = torch.load(os.path.join(folder,'G.pth'))
     G.load_state_dict({k.replace('module.', ''): v for k, v in ckpt.items()})
     return G
+
+def metrics(real_images_path = "data/train_images", generated_images_path = "samples/"):
+    metrics = calculate_metrics(
+        input1=real_images_path,
+        input2=generated_images_path,
+        fid=True,
+        precision=True,
+        recall=True
+    )
+    print("FID:", metrics['frechet_inception_distance'])
+    return
+
+if __name__ == "__main__":
+    # from_mnist_to_jpeg()
+    metrics()
 
 # def D_train(x, G, D, D_optimizer, criterion):
 #     #=======================Train the discriminator=======================#
