@@ -2,23 +2,55 @@
 import torch.nn as nn
 # import torch.nn.functional as F
 
+# class Discriminator(nn.Module):
+#     def __init__(self, d_input_dim):
+#         super().__init__()
+
+#         max_dim = 1024
+
+#         self.disc = nn.Sequential(
+#             nn.Linear(d_input_dim, max_dim), # d_input_dim -> 1024
+#             nn.LeakyReLU(0.2),
+#             nn.Linear(max_dim, max_dim//2), # 1024 -> 512
+#             nn.LeakyReLU(0.2),
+#             nn.Linear(max_dim//2, max_dim//4), # 512 -> 256
+#             nn.LeakyReLU(0.2),
+#             nn.Linear(max_dim//4, 1), # 256 -> 1
+#             nn.Sigmoid(),
+#         )
+
+#     def forward(self, x):
+#         return self.disc(x)
+
+# DCGAN Discriminator
 class Discriminator(nn.Module):
-    def __init__(self, d_input_dim):
+    def __init__(self, channels_img=1, features_d=64):
         super().__init__()
 
-        max_dim = 1024
-
         self.disc = nn.Sequential(
-            nn.Linear(d_input_dim, max_dim), # d_input_dim -> 1024
-            nn.LeakyReLU(0.2),
-            nn.Linear(max_dim, max_dim//2), # 1024 -> 512
-            nn.LeakyReLU(0.2),
-            nn.Linear(max_dim//2, max_dim//4), # 512 -> 256
-            nn.LeakyReLU(0.2),
-            nn.Linear(max_dim//4, 1), # 256 -> 1
-            nn.Sigmoid(),
+            nn.Conv2d(channels_img, features_d, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(0.2), # (1, 28, 28) -> (featrues_d, 14, 14)
+            self._block(features_d, features_d*2, 4, 2, 1), # (features_d, 14, 14) -> (features_d*2, 7, 7)
+            self._block(features_d*2, features_d*4, 3, 2, 1), # (features_d*2, 7, 7) -> (features_d*4, 4, 4)
+            nn.Conv2d(features_d*4, 1, 4, 2, 0), # (features_d*4, 4, 4) -> (1, 1, 1)
         )
 
+    def _block(self, in_channels, out_channels, kernel_size, stride, padding):
+        return nn.Sequential(
+            nn.Conv2d(
+                in_channels,
+                out_channels,
+                kernel_size,
+                stride,
+                padding,
+                bias=False
+            ),
+            # nn.BatchNorm2d(out_channels),
+            # WGAN-GP
+            # nn.InstanceNorm2d(out_channels, affine=True),
+            nn.LeakyReLU(0.2),
+        )
+    
     def forward(self, x):
         return self.disc(x)
 
@@ -40,7 +72,13 @@ class Generator(nn.Module):
         )
     
     def forward(self, x):
-        return self.gen(x)
+        out = self.gen(x)
+        return out.view(out.size(0), 1, 28, 28)
+
+def initialize_weights(model):
+    for m in model.modules():
+        if isinstance(m, (nn.Conv2d, nn.BatchNorm2d)):
+            nn.init.normal_(m.weight.data, 0.0, 0.02)
 
 
 # class Generator(nn.Module):

@@ -1,7 +1,8 @@
 import torch 
 import torchvision
-import os
 import argparse
+import os
+import re
 
 from model import Generator
 from utils import load_model
@@ -14,11 +15,20 @@ if __name__ == '__main__':
                       help="The directory where the model is located.")
     args = parser.parse_args()
 
+    if args.checkpoint_directory != 'checkpoints':
+        match = re.search(r'z(\d+)', args.checkpoint_directory)
+
+        if match:
+            z_dim = int(match.group(1))
+
+    else:
+        z_dim = 100
+
     print('Model Loading...')
     # Model Pipeline
     mnist_dim = 784
 
-    model = Generator(g_output_dim = mnist_dim).cuda()
+    model = Generator(g_output_dim=mnist_dim, z_dim=z_dim).cuda()
     model = load_model(model, args.checkpoint_directory)
     model = torch.nn.DataParallel(model).cuda()
     model.eval()

@@ -10,8 +10,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision import datasets, transforms
 
-from model import Generator, Discriminator
-from utils import save_models
+from model import Generator, Discriminator, initialize_weights
+from utils import save_models, gradient_penalty
 
 if __name__ == '__main__':
     torch.autograd.set_detect_anomaly(True)
@@ -30,6 +30,13 @@ if __name__ == '__main__':
     parser.add_argument("--custom_suffix", type=str, default='', 
                         help="Add a custom suffix to the experiment name.")
     
+    # WGAN
+    critic_iterations = 5
+    weight_clip = 0.01
+    # WGAN-GP
+    # critic_iterations = 5
+    # landa = 10
+
     args = parser.parse_args()
     
     os.makedirs('checkpoints', exist_ok=True)
@@ -79,54 +86,107 @@ if __name__ == '__main__':
     print('Model Loading...')
     mnist_dim = 784
     G = nn.DataParallel(Generator(z_dim=args.z_dim, g_output_dim=mnist_dim)).to(device)
-    D = nn.DataParallel(Discriminator(d_input_dim=mnist_dim)).to(device)
+    # WGAN
+    D = nn.DataParallel(Discriminator()).to(device)
+    # GAN
+    # D = nn.DataParallel(Discriminator(d_input_dim=mnist_dim)).to(device)
+    initialize_weights(G)
+    initialize_weights(D)
+
     print('Model loaded.')
 
     # Optimizers
-    G_optimizer = optim.Adam(G.parameters(), lr=args.lr)
-    D_optimizer = optim.Adam(D.parameters(), lr=args.lr)
+    # WGAN-GP
+    # G_optimizer = optim.Adam(G.parameters(), lr=args.lr, betas=(0.0, 0.9))
+    # D_optimizer = optim.Adam(D.parameters(), lr=args.lr, betas=(0.0, 0.9))
+    # WGAN
+    G_optimizer = optim.RMSprop(G.parameters(), lr=args.lr)
+    D_optimizer = optim.RMSprop(D.parameters(), lr=args.lr)
+    # GAN
+    # G_optimizer = optim.Adam(G.parameters(), lr=args.lr)
+    # D_optimizer = optim.Adam(D.parameters(), lr=args.lr)
 
     # Loss
-    criterion = nn.BCELoss()
+    # criterion = nn.BCELoss()
 
     losses = [] # logging
 
     print('Start Training :')
+    G.train()
+    D.train()
+
     pbar = trange(args.epochs)
     for epoch in pbar:
         running_lossD = 0.0
         running_lossG = 0.0
 
         for batch_i, (real, _) in enumerate(train_loader):
-            real = real.view(-1, mnist_dim).to(device)
+            # WGAN
+            real = real.to(device)
+            # GAN
+            # real = real.view(-1, mnist_dim).to(device)
+            
             batch_size = real.shape[0]
 
+            # WGAN
             # Train Discriminator
-            # Train Discriminator on Real
-            D_real = D(real).view(-1)
-            lossD_real = criterion(D_real, torch.ones_like(D_real))
+            for _ in range(critic_iterations):
+                noise = torch.randn(batch_size, args.z_dim).to(device)
+                fake = G(noise)
+                D_real = D(real).reshape(-1)
+                D_fake = D(fake.detach()).reshape(-1)
 
-            # Train Discriminator on Fake
-            noise = torch.randn(batch_size, args.z_dim).to(device)
-            fake = G(noise)
-            D_fake = D(fake.detach()).view(-1)
-            lossD_fake = criterion(D_fake, torch.zeros_like(D_fake))
+                # WGAN-GP
+                # gp = gradient_penalty(D, real, fake, device=device)
+                # lossD = -(torch.mean(D_real) - torch.mean(D_fake)) + landa*gp
+                # WGAN
+                lossD = -(torch.mean(D_real) - torch.mean(D_fake))
+                D.zero_grad()
+                lossD.backward(retain_graph=True)
+                D_optimizer.step()
 
-            lossD = (lossD_real + lossD_fake) # Maybe divide by 2?
-            D.zero_grad()
-            lossD.backward()
-            D_optimizer.step()
+                running_lossD += lossD.item()
 
-            running_lossD += lossD.item()
+                for p in D.parameters():
+                    p.data.clamp_(-weight_clip, weight_clip)
 
             # Train Generator
-            output = D(fake).view(-1)
-            lossG = criterion(output, torch.ones_like(output))
+            output = D(fake).reshape(-1)
+            lossG = -torch.mean(output)
+
             G.zero_grad()
             lossG.backward()
             G_optimizer.step()
 
             running_lossG += lossG.item()
+
+            # GAN
+            # # Train Discriminator
+            # # Train Discriminator on Real
+            # D_real = D(real).view(-1)
+            # lossD_real = criterion(D_real, torch.ones_like(D_real))
+
+            # # Train Discriminator on Fake
+            # noise = torch.randn(batch_size, args.z_dim).to(device)
+            # fake = G(noise)
+            # D_fake = D(fake.detach()).view(-1)
+            # lossD_fake = criterion(D_fake, torch.zeros_like(D_fake))
+
+            # lossD = (lossD_real + lossD_fake) # Maybe divide by 2?
+            # D.zero_grad()
+            # lossD.backward()
+            # D_optimizer.step()
+
+            # running_lossD += lossD.item()
+
+            # # Train Generator
+            # output = D(fake).view(-1)
+            # lossG = criterion(output, torch.ones_like(output))
+            # G.zero_grad()
+            # lossG.backward()
+            # G_optimizer.step()
+
+            # running_lossG += lossG.item()
 
         avg_lossD = running_lossD / len(train_loader)
         avg_lossG = running_lossG / len(train_loader)
